@@ -375,11 +375,33 @@ def convert_date_format(date_str: str) -> str:
     except ValueError:
         return date_str
 
-def transform_step_1(orders_df: pd.DataFrame) -> pd.DataFrame:
+def format_verwendungszweck(order: pd.Series, header_line: str) -> str:
+    """
+    Format the Verwendungszweck field with the specified structure.
+    Args:
+        order: Series containing order data
+        header_line: The variable header line to use
+    Returns:
+        str: Formatted Verwendungszweck text
+    """
+    parts = [
+        header_line,
+        f"Referenz: {order['order url']}",
+        f"Lieferadresse: {order['to'] if pd.notna(order['to']) else ''}",
+        f"Versand: {order['shipping'] if pd.notna(order['shipping']) else ''}",
+        f"Versanderstattung: {order['shipping_refund'] if pd.notna(order['shipping_refund']) else ''}",
+        f"Gutschein: {order['gift'] if pd.notna(order['gift']) else ''}",
+        f"Erstattung: {order['refund'] if pd.notna(order['refund']) else ''}"
+    ]
+
+    return ", ".join(parts)
+
+def transform_step_1(orders_df: pd.DataFrame, items_df: pd.DataFrame) -> pd.DataFrame:
     """
     First transformation step: Create base output entries for each order.
     Args:
         orders_df: DataFrame containing the orders
+        items_df: DataFrame with individual items
     Returns:
         pd.DataFrame: Output DataFrame with base entries
     """
@@ -392,19 +414,46 @@ def transform_step_1(orders_df: pd.DataFrame) -> pd.DataFrame:
         # Convert date to required format
         formatted_date = convert_date_format(order['date'])
 
-        # Create base row for this order
-        base_row = {
+        # Get total amount without currency symbol
+        total_amount = str(parse_euro_amount(order['total'])).replace('.', ',')
+
+        # Create first row for this order (Amazon Contra)
+        contra_row = {
             'Datum': formatted_date,
             'Wertstellung': formatted_date,
             'Name': order['order id'],
             'Kategorie': '',
-            'Verwendungszweck': '',
+            'Verwendungszweck': format_verwendungszweck(order, "Amazon Contra"),
             'Konto': '',
             'Bank': '',
-            'Betrag': '',
-            'Währung': ''
+            'Betrag': total_amount,
+            'Währung': 'EUR'
         }
-        output_rows.append(base_row)
+        output_rows.append(contra_row)
+
+        # Get all items for this order
+        order_items = items_df[items_df['order id'] == order['order id']]
+
+        # Add a row for each item (considering quantity)
+        for _, item in order_items.iterrows():
+            # Get item price and quantity
+            item_price = parse_euro_amount(item['price'])
+            quantity = int(item['quantity']) if pd.notna(item['quantity']) else 1
+
+            # Create a row for each unit of the item
+            for _ in range(quantity):
+                item_row = {
+                    'Datum': formatted_date,
+                    'Wertstellung': formatted_date,
+                    'Name': order['order id'],
+                    'Kategorie': '',
+                    'Verwendungszweck': format_verwendungszweck(order, item['description']),
+                    'Konto': '',
+                    'Bank': '',
+                    'Betrag': str(-item_price).replace('.', ','),  # Negative price
+                    'Währung': 'EUR'
+                }
+                output_rows.append(item_row)
 
     # Add all rows to output DataFrame
     if output_rows:
@@ -467,11 +516,14 @@ def process_csv(orders_file: str, items_file: str):
         print(f"Orders with price differences have been saved to: {orders_with_diff_file}")
 
         # Apply first transformation step
-        output_df = transform_step_1(orders_df)
+        output_df = transform_step_1(orders_df, items_df)
 
         # Save output file
         output_file = os.path.join(work_dir, 'processed_output.csv')
-        output_df.to_csv(output_file, index=False, sep=';', encoding='utf-8')
+        output_df.to_csv(output_file,
+                        index=False,
+                        sep=';',
+                        encoding='utf-8')
         print(f"Output file has been created at: {output_file}")
 
         # Count total items
