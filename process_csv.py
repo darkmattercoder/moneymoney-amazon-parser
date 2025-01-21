@@ -361,6 +361,57 @@ def create_output_dataframe() -> pd.DataFrame:
     ]
     return pd.DataFrame(columns=columns)
 
+def convert_date_format(date_str: str) -> str:
+    """
+    Convert date from YYYY-MM-DD to DD.MM.YYYY format.
+    Args:
+        date_str: Date string in YYYY-MM-DD format
+    Returns:
+        str: Date string in DD.MM.YYYY format
+    """
+    try:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        return date_obj.strftime('%d.%m.%Y')
+    except ValueError:
+        return date_str
+
+def transform_step_1(orders_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    First transformation step: Create base output entries for each order.
+    Args:
+        orders_df: DataFrame containing the orders
+    Returns:
+        pd.DataFrame: Output DataFrame with base entries
+    """
+    # Create empty output DataFrame
+    output_df = create_output_dataframe()
+
+    # Process each order
+    output_rows = []
+    for _, order in orders_df.iterrows():
+        # Convert date to required format
+        formatted_date = convert_date_format(order['date'])
+
+        # Create base row for this order
+        base_row = {
+            'Datum': formatted_date,
+            'Wertstellung': formatted_date,
+            'Name': order['order id'],
+            'Kategorie': '',
+            'Verwendungszweck': '',
+            'Konto': '',
+            'Bank': '',
+            'Betrag': '',
+            'Währung': ''
+        }
+        output_rows.append(base_row)
+
+    # Add all rows to output DataFrame
+    if output_rows:
+        output_df = pd.concat([output_df, pd.DataFrame(output_rows)], ignore_index=True)
+
+    return output_df
+
 def process_csv(orders_file: str, items_file: str):
     """
     Process the input CSV files.
@@ -415,13 +466,13 @@ def process_csv(orders_file: str, items_file: str):
         orders_df.to_csv(orders_with_diff_file, index=False)
         print(f"Orders with price differences have been saved to: {orders_with_diff_file}")
 
-        # Create output DataFrame with required schema
-        output_df = create_output_dataframe()
+        # Apply first transformation step
+        output_df = transform_step_1(orders_df)
 
-        # Save initial output file
+        # Save output file
         output_file = os.path.join(work_dir, 'processed_output.csv')
         output_df.to_csv(output_file, index=False, sep=';', encoding='utf-8')
-        print(f"Initial output file has been created at: {output_file}")
+        print(f"Output file has been created at: {output_file}")
 
         # Count total items
         total_items = orders_df['items'].apply(count_items).sum()
