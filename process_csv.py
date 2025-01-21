@@ -455,6 +455,38 @@ def transform_step_1(orders_df: pd.DataFrame, items_df: pd.DataFrame) -> pd.Data
                 }
                 output_rows.append(item_row)
 
+        # Add gift booking line if gift amount is greater than 0
+        gift_amount = parse_euro_amount(order['gift'])
+        if gift_amount > 0:
+            gift_row = {
+                'Datum': formatted_date,
+                'Wertstellung': formatted_date,
+                'Name': order['order id'],
+                'Kategorie': '',
+                'Verwendungszweck': format_verwendungszweck(order, "Gutscheinbuchung"),
+                'Konto': '',
+                'Bank': '',
+                'Betrag': str(gift_amount).replace('.', ','),  # Positive gift amount
+                'Währung': 'EUR'
+            }
+            output_rows.append(gift_row)
+
+        # Add difference amount line
+        difference = order['price_difference']
+        if abs(difference) > 0.01:  # Only add if there's a significant difference
+            diff_row = {
+                'Datum': formatted_date,
+                'Wertstellung': formatted_date,
+                'Name': order['order id'],
+                'Kategorie': '',
+                'Verwendungszweck': format_verwendungszweck(order, "Differenzbetrag (Coupons etc.)"),
+                'Konto': '',
+                'Bank': '',
+                'Betrag': str(-difference).replace('.', ','),  # Swap the sign of the difference
+                'Währung': 'EUR'
+            }
+            output_rows.append(diff_row)
+
     # Add all rows to output DataFrame
     if output_rows:
         output_df = pd.concat([output_df, pd.DataFrame(output_rows)], ignore_index=True)
