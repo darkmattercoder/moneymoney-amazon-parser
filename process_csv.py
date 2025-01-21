@@ -261,6 +261,87 @@ def verify_file_types(orders_file: str, items_file: str) -> bool:
         print(f"Error verifying file types: {str(e)}")
         return False
 
+def parse_euro_amount(amount_str: str) -> float:
+    """
+    Parse a Euro amount string to float.
+    Args:
+        amount_str: String representing an amount (e.g. "€10,99")
+    Returns:
+        float: The parsed amount
+    """
+    if pd.isna(amount_str):
+        return 0.0
+    # Remove € symbol and convert German format to standard float
+    cleaned = amount_str.replace('€', '').replace(',', '.').strip()
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+def validate_order_totals(orders_df: pd.DataFrame, items_df: pd.DataFrame) -> tuple[bool, list, dict]:
+    """
+    Validate that order totals match the sum of their item prices.
+    Args:
+        orders_df: DataFrame with orders
+        items_df: DataFrame with individual items
+    Returns:
+        tuple: (is_valid, list of discrepancies, dict of order_id to price difference)
+    """
+    discrepancies = []
+    total_orders = len(orders_df)
+    discrepancy_count = 0
+    mismatching_orders = []  # List of tuples (order_id, difference)
+    price_differences = {}  # Dictionary to store all price differences
+
+    # Process each order
+    for _, order_row in orders_df.iterrows():
+        order_id = order_row['order id']
+
+        # Calculate order total including gift amount
+        order_total = parse_euro_amount(order_row['total'])
+        gift_amount = parse_euro_amount(order_row['gift'])
+        total_with_gift = order_total + gift_amount
+
+        # Get all items for this order
+        order_items = items_df[items_df['order id'] == order_id]
+
+        # Calculate total from items
+        items_total = 0.0
+        for _, item in order_items.iterrows():
+            item_price = parse_euro_amount(item['price'])
+            quantity = int(item['quantity']) if pd.notna(item['quantity']) else 1
+            items_total += item_price * quantity
+
+        # Compare totals (allowing for small floating point differences)
+        difference = total_with_gift - items_total
+        # Store all differences, even small ones
+        price_differences[order_id] = difference
+
+        if abs(difference) > 0.01:  # 1 cent tolerance
+            discrepancy_count += 1
+            mismatching_orders.append((order_id, difference))
+            discrepancies.append(f"\nDiscrepancy found for order {order_id}:")
+            discrepancies.append(f"Order total: €{total_with_gift:.2f} (base: €{order_total:.2f}, gift: €{gift_amount:.2f})")
+            discrepancies.append(f"Sum of items: €{items_total:.2f}")
+            discrepancies.append("Items in this order:")
+            for _, item in order_items.iterrows():
+                quantity = int(item['quantity']) if pd.notna(item['quantity']) else 1
+                price = parse_euro_amount(item['price'])
+                discrepancies.append(f"- {quantity}x {item['description']} at €{price:.2f} each")
+
+    # Add summary at the end of discrepancies list
+    if discrepancy_count > 0:
+        discrepancies.append(f"\nPrice Validation Summary:")
+        discrepancies.append(f"Total orders checked: {total_orders}")
+        discrepancies.append(f"Orders with price discrepancies: {discrepancy_count}")
+        discrepancies.append(f"Percentage of orders with discrepancies: {(discrepancy_count/total_orders*100):.1f}%")
+        discrepancies.append(f"\nOrder IDs with price mismatches (positive difference means order total > sum of items):")
+        # Sort by order ID and format the output
+        for order_id, diff in sorted(mismatching_orders):
+            discrepancies.append(f"{order_id}: €{diff:+.2f}")
+
+    return discrepancy_count == 0, discrepancies, price_differences
+
 def process_csv(orders_file: str, items_file: str):
     """
     Process the input CSV files.
@@ -300,6 +381,20 @@ def process_csv(orders_file: str, items_file: str):
             print("\nError: Inconsistencies found between orders and items files:")
             print('\n'.join(inconsistencies))
             sys.exit(1)
+
+        # Validate order totals and store price differences
+        is_valid, discrepancies, price_differences = validate_order_totals(orders_df, items_df)
+        if not is_valid:
+            print("\nWarning: Found discrepancies between order totals and item prices:")
+            print('\n'.join(discrepancies))
+
+        # Add price differences to orders DataFrame for later use
+        orders_df['price_difference'] = orders_df['order id'].map(price_differences)
+
+        # Save orders with price differences
+        orders_with_diff_file = os.path.join(work_dir, 'orders_with_differences.csv')
+        orders_df.to_csv(orders_with_diff_file, index=False)
+        print(f"Orders with price differences have been saved to: {orders_with_diff_file}")
 
         # Count total items
         total_items = orders_df['items'].apply(count_items).sum()
