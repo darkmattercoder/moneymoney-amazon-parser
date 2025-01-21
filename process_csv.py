@@ -471,6 +471,37 @@ def transform_step_1(orders_df: pd.DataFrame, items_df: pd.DataFrame) -> pd.Data
             }
             output_rows.append(gift_row)
 
+        # Add refund entries if refund amount is present
+        refund_amount = parse_euro_amount(order['refund'])
+        if refund_amount > 0:
+            # Add refund row (positive amount)
+            refund_row = {
+                'Datum': formatted_date,
+                'Wertstellung': formatted_date,
+                'Name': order['order id'],
+                'Kategorie': '',
+                'Verwendungszweck': format_verwendungszweck(order, "Refund"),
+                'Konto': '',
+                'Bank': '',
+                'Betrag': str(refund_amount).replace('.', ','),
+                'Währung': 'EUR'
+            }
+            output_rows.append(refund_row)
+
+            # Add contra refund row (negative amount)
+            contra_refund_row = {
+                'Datum': formatted_date,
+                'Wertstellung': formatted_date,
+                'Name': order['order id'],
+                'Kategorie': '',
+                'Verwendungszweck': format_verwendungszweck(order, "Contra refund"),
+                'Konto': '',
+                'Bank': '',
+                'Betrag': str(-refund_amount).replace('.', ','),
+                'Währung': 'EUR'
+            }
+            output_rows.append(contra_refund_row)
+
         # Add difference amount line
         difference = order['price_difference']
         if abs(difference) > 0.01:  # Only add if there's a significant difference
