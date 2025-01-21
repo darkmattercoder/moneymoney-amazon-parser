@@ -342,6 +342,25 @@ def validate_order_totals(orders_df: pd.DataFrame, items_df: pd.DataFrame) -> tu
 
     return discrepancy_count == 0, discrepancies, price_differences
 
+def create_output_dataframe() -> pd.DataFrame:
+    """
+    Create a new DataFrame with the required output schema.
+    Returns:
+        pd.DataFrame: Empty DataFrame with the required columns
+    """
+    columns = [
+        'Datum',          # Date
+        'Wertstellung',   # Value date
+        'Kategorie',      # Category
+        'Name',           # Name
+        'Verwendungszweck', # Purpose
+        'Konto',          # Account
+        'Bank',           # Bank
+        'Betrag',         # Amount
+        'Währung'         # Currency
+    ]
+    return pd.DataFrame(columns=columns)
+
 def process_csv(orders_file: str, items_file: str):
     """
     Process the input CSV files.
@@ -395,6 +414,14 @@ def process_csv(orders_file: str, items_file: str):
         orders_with_diff_file = os.path.join(work_dir, 'orders_with_differences.csv')
         orders_df.to_csv(orders_with_diff_file, index=False)
         print(f"Orders with price differences have been saved to: {orders_with_diff_file}")
+
+        # Create output DataFrame with required schema
+        output_df = create_output_dataframe()
+
+        # Save initial output file
+        output_file = os.path.join(work_dir, 'processed_output.csv')
+        output_df.to_csv(output_file, index=False, sep=';', encoding='utf-8')
+        print(f"Initial output file has been created at: {output_file}")
 
         # Count total items
         total_items = orders_df['items'].apply(count_items).sum()
