@@ -415,21 +415,20 @@ def transform_step_1(orders_df: pd.DataFrame, items_df: pd.DataFrame) -> pd.Data
         formatted_date = convert_date_format(order['date'])
 
         # Get total amount without currency symbol
-        total_amount = str(parse_euro_amount(order['total'])).replace('.', ',')
-
-        # Create first row for this order (Amazon Contra)
-        contra_row = {
-            'Datum': formatted_date,
-            'Wertstellung': formatted_date,
-            'Name': order['order id'],
-            'Kategorie': '',
-            'Verwendungszweck': format_verwendungszweck(order, "Amazon Contra"),
-            'Konto': '',
-            'Bank': '',
-            'Betrag': total_amount,
-            'Währung': 'EUR'
-        }
-        output_rows.append(contra_row)
+        total_amount = parse_euro_amount(order['total'])
+        if total_amount != 0:  # Only add if amount is not zero
+            contra_row = {
+                'Datum': formatted_date,
+                'Wertstellung': formatted_date,
+                'Name': order['order id'],
+                'Kategorie': '',
+                'Verwendungszweck': format_verwendungszweck(order, "Amazon Contra"),
+                'Konto': '',
+                'Bank': '',
+                'Betrag': str(total_amount).replace('.', ','),
+                'Währung': 'EUR'
+            }
+            output_rows.append(contra_row)
 
         # Get all items for this order
         order_items = items_df[items_df['order id'] == order['order id']]
