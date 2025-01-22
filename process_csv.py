@@ -384,6 +384,14 @@ def format_verwendungszweck(order: pd.Series, header_line: str) -> str:
     Returns:
         str: Formatted Verwendungszweck text
     """
+    # Format difference with 2 decimal places and German number format
+    difference = order['price_difference'] if pd.notna(order['price_difference']) else 0.0
+    formatted_difference = str(difference).replace('.', ',')
+    if ',' not in formatted_difference:
+        formatted_difference += ',00'
+    elif len(formatted_difference.split(',')[1]) == 1:
+        formatted_difference += '0'
+
     parts = [
         header_line,
         f"Referenz: {order['order url']}",
@@ -391,7 +399,8 @@ def format_verwendungszweck(order: pd.Series, header_line: str) -> str:
         f"Versand: {order['shipping'] if pd.notna(order['shipping']) else ''}",
         f"Versanderstattung: {order['shipping_refund'] if pd.notna(order['shipping_refund']) else ''}",
         f"Gutschein: {order['gift'] if pd.notna(order['gift']) else ''}",
-        f"Erstattung: {order['refund'] if pd.notna(order['refund']) else ''}"
+        f"Erstattung: {order['refund'] if pd.notna(order['refund']) else ''}",
+        f"Differenz: {formatted_difference}"
     ]
 
     return ", ".join(parts)
