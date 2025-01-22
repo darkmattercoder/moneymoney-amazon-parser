@@ -384,24 +384,40 @@ def format_verwendungszweck(order: pd.Series, header_line: str) -> str:
     Returns:
         str: Formatted Verwendungszweck text
     """
-    # Format difference with 2 decimal places and German number format
-    difference = order['price_difference'] if pd.notna(order['price_difference']) else 0.0
-    formatted_difference = str(difference).replace('.', ',')
-    if ',' not in formatted_difference:
-        formatted_difference += ',00'
-    elif len(formatted_difference.split(',')[1]) == 1:
-        formatted_difference += '0'
+    parts = [header_line]
 
-    parts = [
-        header_line,
-        f"Referenz: {order['order url']}",
-        f"Lieferadresse: {order['to'] if pd.notna(order['to']) else ''}",
-        f"Versand: {order['shipping'] if pd.notna(order['shipping']) else ''}",
-        f"Versanderstattung: {order['shipping_refund'] if pd.notna(order['shipping_refund']) else ''}",
-        f"Gutschein: {order['gift'] if pd.notna(order['gift']) else ''}",
-        f"Erstattung: {order['refund'] if pd.notna(order['refund']) else ''}",
-        f"Differenz: {formatted_difference}"
-    ]
+    # Always include reference and delivery address
+    parts.append(f"Referenz: {order['order url']}")
+    if pd.notna(order['to']) and order['to']:
+        parts.append(f"Lieferadresse: {order['to']}")
+
+    # Only include monetary fields if they have non-zero values
+    shipping = parse_euro_amount(order['shipping'])
+    if shipping != 0:
+        parts.append(f"Versand: {order['shipping']}")
+
+    shipping_refund = parse_euro_amount(order['shipping_refund'])
+    if shipping_refund != 0:
+        parts.append(f"Versanderstattung: {order['shipping_refund']}")
+
+    gift = parse_euro_amount(order['gift'])
+    if gift != 0:
+        parts.append(f"Gutschein: {order['gift']}")
+
+    refund = parse_euro_amount(order['refund'])
+    if refund != 0:
+        parts.append(f"Erstattung: {order['refund']}")
+
+    # Only include difference if it's significant (more than 1 cent)
+    difference = order['price_difference'] if pd.notna(order['price_difference']) else 0.0
+    if abs(difference) > 0.01:
+        # Format difference with 2 decimal places and German number format
+        formatted_difference = str(difference).replace('.', ',')
+        if ',' not in formatted_difference:
+            formatted_difference += ',00'
+        elif len(formatted_difference.split(',')[1]) == 1:
+            formatted_difference += '0'
+        parts.append(f"Differenz: {formatted_difference}")
 
     return ", ".join(parts)
 
