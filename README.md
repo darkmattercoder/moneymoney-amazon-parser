@@ -54,18 +54,26 @@ The generated `processed_output.csv` contains the following columns:
 - Datum (Date)
 - Wertstellung (Value date)
 - Kategorie (Category)
-- Name
+- Name (Order ID)
 - Verwendungszweck (Purpose)
 - Konto (Account)
 - Bank
 - Betrag (Amount)
 - Währung (Currency)
 
-For each order, multiple rows are generated:
-1. Main order entry (Amazon Contra)
-2. Individual item entries
-3. Gift card entry (if applicable)
-4. Difference amount entry (if discrepancies exist)
+For each order, the following rows are generated (if applicable):
+1. Main order entry ("Amazon Contra") with positive total amount
+2. Individual item entries with negative amounts (one row per item quantity)
+3. Gift card entry ("Gutscheinbuchung") with positive amount if a gift card was used
+4. Refund entries if a refund exists:
+   - "Refund" entry with positive amount
+   - "Contra refund" entry with negative amount
+5. Difference amount entry ("Differenzbetrag (Coupons etc.)") if there's a price discrepancy
+
+Special handling:
+- Rows with zero amounts are automatically skipped
+- Last row of input file is ignored if it contains subtotals
+- Digital orders (starting with 'D01-') are handled specially for deduplication
 
 ## License
 
